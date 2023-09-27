@@ -1,0 +1,107 @@
+---
+title: 'Chapter 1: The Golem of Prague'
+author: "Paulo Magalang"
+date: "2023-09-27"
+output: html_document
+---
+
+Lecture: https://www.youtube.com/watch?v=FdnMWdICdRs&list=PLDcUM9US4XdPz-KxHM4XHt7uUVGWWVSus&index=2
+
+
+## Causal Inference: Putting the science before stats
+
+* need to connect causal/scientific models to statistical models to have some
+scientific insight
+
+* the causes of data cannot be extracted from only data; an external causal model
+is necessary
+
+* causal inference: the *prediction* of intervention and the *imputation* of missing
+observations
+
+* causal prediction: knowing a cause means being able to predict the consequences of an intervention
+(ie: one can predict what would happen if something in the system is changed);
+what if I do this?
+
+* causal imputation: knowing a cause means being able to construct unobserved counterfactual
+outcomes; what if I had done something else?
+
+* causal inference is related to the *description* of populations and the *design* of the project;
+all depend on a causal model/knowledge
+
+* descriptive studies need a causal model since something about the system is causing certain
+samples in the population to be different
+
+
+## Directed Acyclic Graphs (DAGs)
+
+* abstract/heuristic causal models
+
+* nodes are names of variables; edges are causal relationships or the consequences of
+an intervention
+
+* X (treatment) -> Y (outcome); one directional relationship but other factors still
+affect X and Y; need to draw those as well
+
+* B -> Y; X and B are competing causes of Y
+
+* A -> X; A is an influence of the treatment
+
+* C -> X, Y; common causes of X and Y, confound, control for C to correctly determine
+X -> Y relationship
+
+* A, B, C have relationships among themselves as well
+
+* can ask different questions with DAGs, each question will require a different model
+
+* control variables to control common causes to correctly infer causal relationships;
+bad controls exist
+
+* can test/refine causal models; intuiton pumps
+
+
+## Golems (or statistical models)
+
+* models have no wisdom or foresight
+
+* relationship between research and testing is not clear; focusing on rejecting
+null hypothesis is limiting
+
+* null models are not unique; many processes produce similar distributions
+
+* research questions require generative causal models, statistical models that analyze
+generated data, and a way to produce estimates
+
+* Bayes is overkill sometimes but is practical
+
+
+## OWLs
+
+* understand what you are doing, document your work, and build a respectable workflow
+
+* Drawing the Bayesian Owl
+
+1. theoretical estimand
+
+2. scientific (causal) model(s)
+
+3. Use 1 and 2 to build statistical model(s)
+
+4. Simulate from 2 to validate 3 yields 1
+
+5. Analyze real data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
