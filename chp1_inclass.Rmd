@@ -1,0 +1,43 @@
+---
+title: 'Chapter 1: In class'
+author: "Paulo Magalang"
+date: "2023-09-27"
+output: html_document
+---
+
+test rethinking package installed correctly (copying code from https://github.com/rmcelreath/rethinking/)
+
+```{r}
+library(rethinking)
+```
+
+```{r}
+f <- alist(
+    y ~ dnorm( mu , sigma ),
+    mu ~ dnorm( 0 , 10 ),
+    sigma ~ dexp( 1 )
+)
+
+fit <- quap( 
+    f , 
+    data=list(y=c(-1,1)) , 
+    start=list(mu=0,sigma=1)
+)
+
+summary(fit)
+```
+
+```{r}
+# works but takes a while to run
+fit_stan <- ulam( f , data=list(y=c(-1,1)) )
+```
+
+
+
+
+
+
+
+
+
+
