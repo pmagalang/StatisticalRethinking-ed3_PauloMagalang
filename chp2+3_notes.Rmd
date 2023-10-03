@@ -1,0 +1,221 @@
+---
+title: 'Chapter 2 and 3'
+author: "Paulo Magalang"
+date: "2023-10-03"
+output: html_document
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(rethinking)
+```
+
+
+Lecture: https://www.youtube.com/watch?v=R1vcdhPBlXA&list=PLDcUM9US4XdPz-KxHM4XHt7uUVGWWVSus&index=3
+
+## What proportion of the Earth is covered in water?
+
+* take samples by taking a random point on a globe and determine if it is land or water
+
+* How should we use the sample?
+
+* How to produce a summary?
+
+* How to represent uncertainty?
+
+### Generative model of the globe
+
+* begin conceptually: How do the variables influence one another? (ie: what are the causal relationships)
+
+* variables: proportion of water (p), water observations (W), number of tosses (N),
+land observations (L)
+
+* N influences W, L
+
+* p influences W, L
+
+* Generative assumptions: What do the arrows mean exactly?
+
+  - W,L = f(p, N): W and L will change if p or N changes
+  
+## Bayesian data analysis
+
+* for each possible explanation of the sample, count all the ways the sample could happen.
+
+* explanations with more ways to produce the sample are more plausible
+
+* extended to water globe example:
+
+  - for each possible proportion of water (p) on the globe, count all the ways the sample
+  of tosses (N) could happen
+  
+  - proportions with more ways to produce the sample are more plausible
+  
+* using forking tree visualization, 3 ways to observe WLW for 25% water. now calculate for
+all scenarios (0% water, 25%, etc)
+
+* unglamorous basis of applied probability: things that can happen more ways are more plausible
+
+* since independent draws/tosses, can multiply across when updating
+
+* ways for p to produce $W,L = (4p)^W \times (4-4p)^L$
+
+* posterior distribution: probability of proportion under each scenario
+
+## Test Before You Estimate
+
+1. Code a generative simulation
+
+2. Code an estimator
+
+3. Test (2) with (1)
+
+```{r}
+# generative simulation
+
+# function to toss a globe covererd p by water N times
+sim_globe <- function(p = 0.7, N = 9) {
+  sample(c("W", "L"), size = N, prob = c(p, 1-p), replace = TRUE)
+}
+
+sim_globe()
+```
+
+```{r}
+replicate(sim_globe(p = 0.5, N = 9), n = 10)
+```
+
+```{r}
+# test the simulation on extreme settings
+sim_globe(p = 1, N = 11)
+```
+
+```{r}
+sum(sim_globe(p = 0.5, N = 1e4) == "W") / 1e4 # should expect outcome to be close to p (0.5)
+```
+
+```{r}
+# code the estimator
+# ways to produce W,L = (4p)^W * (4 - 4p)^L
+
+# function to compute posterior distribution
+compute_posterior <- function(the_sample, poss = c(0, 0.25, 0.5, 0.75, 1)) {
+  W <- sum(the_sample == "W") # num of W observed
+  L <- sum(the_sample == "L") # num of L observed
+  ways <- sapply(poss, function(q) (q*4)^W * ((1-q)*4)^L)
+  post <- ways / sum(ways)
+  bars <- sapply(post, function(q) make_bar(q))
+  data.frame(poss, ways, post = round(post, 3), bars)
+}
+
+compute_posterior(sim_globe())
+```
+
+* the globe is a polyhedron with infinite number of sides. the posterior probability
+of any "side" is proportional to $p^W(1 - p)^L$
+
+* posterior probability of $p = \frac{(W + L + 1)!}{W!L!} p^W(1-p)^L$ (aka the Beta distribution)
+
+* problems with Bayesian updating:
+
+1. no minimum sample size
+
+2. shape embodies sample size
+
+3. no point estimate, the estimate is the entire posterior distribution (use
+summary stats: mean, mode); always use the entire distribution
+
+4. no one true interval; intervals are summaries of the posterior when we can't give
+entire distribution
+
+## From Posterior to Prediction
+
+* implications of model must use the entire posterior distribution
+
+* must average any inference over entire posterior
+
+* requires integral calculus or resample from posterior
+
+```{r}
+# sampling the posterior
+post_samples <- rbeta(1e3, 6+1, 3+1)
+dens(post_samples, lwd = 4, col = 2, xlab = "proportion of water", adj = 0.1)
+curve(dbeta(x, 6+1, 3+1), add = TRUE, lty = 2, lwd = 3)
+```
+
+* posterior predictive distribtuion: prediction of future experiment that is made from
+existing estimate; captures all uncertainty
+
+* given what we know, what happens if we take more samples?
+
+```{r}
+# now simulate posterior predictive distribution
+post_samples <- rbeta(1e4, 6+1, 3+1) # posterior distribution
+
+# using posterior distribution, resample 
+pred_post <- sapply(post_samples, function(p) sum(sim_globe(p, 10) == "W"))
+tab_post <- table(pred_post)
+```
+
+```{r}
+#for(i in 0:10) lines(c(i, i), c(0, tab_post[i + 1]), lwd = 4, col = 4)
+```
+
+* sample from posterior, compute desired quantity for each sample
+
+* sampling is easier than integrals
+
+* Bayesian modesty: no guarantees except that it is logical; method of logically
+deducing implications of data (objective) under our own assumptions (subjective)
+
+
+## Misclassification
+
+* circled node: unobserved
+
+* ie: population size is unobserved in most studies
+
+* What if the number of true samples is unobserved? (ie: measurement error)
+
+  - W*: misclassified sample
+  
+  - M: measurement process, can be attributed to research design or aspects of the system
+  
+  - updated DAG: W, M -> W* where W is circled
+  
+* develop Bayesian estimator assuming misclassification
+
+```{r}
+sim_globe2 <- function(p = 0.7, N= 9, x = 0.1) {
+  true_sample <- sample(c("W", "L"), size = N, prob = c(p, 1-p), replace = TRUE)
+  obs_sample <- ifelse(runif(N) < x,
+                       ifelse(true_sample == "W", "L", "W"), # error
+                       true_sample) # no error
+  return(obs_sample)
+}
+```
+
+* $Pr(water | p,x) = p(1-x) + (1-p)x$: water happened and is true or land and misclassified
+
+* $Pr(land | p,x) = (1-p)(1-x) + px$: land happened and is true or water and misclassified
+
+* posterior distribution of p given W,L,x:
+
+$$
+Pr(p | W, L, x) = \frac{[p(1-x) + (1-p)x]^W \times [(1-p)(1-x) + px]^L}{Z}
+$$
+
+* better to model measurement error, missing data, compliance,
+inclusion, etc. than to ignore it
+
+* good news: samples do not need to be representative of population to provide good
+estimates of population
+
+
+
+
+
+
+
+
+
+
