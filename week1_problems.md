@@ -7,7 +7,8 @@ output:
     keep_md: yes
 ---
 
-```{r, message=FALSE, warning=FALSE}
+
+```r
 library(rethinking)
 library(ggplot2)
 ```
@@ -15,7 +16,8 @@ library(ggplot2)
 1. Suppose the globe tossing data (Lecture 2, Chapter 2) had turned out to be 4 water
 and 11 land. Construct the posterior distribution.
 
-```{r}
+
+```r
 # set a seed for consistency
 set.seed(12345)
 
@@ -35,7 +37,23 @@ post_tbl <- compute_posterior(x, poss = seq(0, 1, by = 0.1))
 post_tbl
 ```
 
-```{r}
+```
+##    poss         ways  post                 bars
+## 1   0.0 0.000000e+00 0.000                     
+## 2   0.1 3.369516e+04 0.068 #                   
+## 3   0.2 1.475740e+05 0.300 ######              
+## 4   0.3 1.719742e+05 0.350 #######             
+## 5   0.4 9.972490e+04 0.203 ####                
+## 6   0.5 3.276800e+04 0.067 #                   
+## 7   0.6 5.836665e+03 0.012                     
+## 8   0.7 4.566946e+02 0.001                     
+## 9   0.8 9.007199e+00 0.000                     
+## 10  0.9 7.044820e-03 0.000                     
+## 11  1.0 0.000000e+00 0.000
+```
+
+
+```r
 # alternate approach
 likelihood <- function(W, L, p) dbinom(W, W + L, p)
 prior <- function(p) return(1)
@@ -45,10 +63,13 @@ un_standard_post <- likelihood(4, 11, candidates) * prior(candidates) # posterio
 plot(un_standard_post)
 ```
 
+![](week1_problems_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
+
 2. Using the posterior distribution from 1, compute the posterior predictive distribution
 for the next 5 tosses of the same globe. I recommend you use the sampling method.
 
-```{r}
+
+```r
 # use table from 1, work with posterior probabilities
 post_samples <- post_tbl$post
 
@@ -62,23 +83,40 @@ pred_post <- sapply(post_samples, function(p) sum(sim_globe(p, 5) == "W"))
 tab_post <- table(pred_post)
 ```
 
-```{r}
+
+```r
 samples_of_p <- sample(post_tbl$poss, 1e4, replace = TRUE, prob = post_tbl$post)
 hist(samples_of_p)
+```
 
+![](week1_problems_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+
+```r
 sim_5_toss <- rbinom(length(samples_of_p), 5, prob = samples_of_p)
 hist(sim_5_toss)
 ```
+
+![](week1_problems_files/figure-html/unnamed-chunk-5-2.png)<!-- -->
 
 
 
 3. Use the posterior predictive distribution from 2 to calculate the probability of 3 or
 more water samples in the next 5 tosses.
 
-```{r}
+
+```r
 hist(sim_5_toss, prob = T)
+```
+
+![](week1_problems_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
+
+```r
 # sum across (probability of 3 and 4 and 5)
 mean(sim_5_toss >= 3)
+```
+
+```
+## [1] 0.1757
 ```
 
 
