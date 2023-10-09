@@ -1,0 +1,340 @@
+---
+title: 'Chapter 4: Geocentric Models'
+author: "Paulo Magalang"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r, eval = FALSE, warning = FALSE}
+library(rethinking)
+library(tidyverse)
+library(ggplot2)
+```
+
+
+## Linear Regression
+
+* Geocentric: describes associations, makes predictions but mechanistically wrong,
+"unreasonablly good approx of assoc", assoc depends on some external model that we
+project on it, distinction between causal model and statistical model
+
+* Gaussian: abstracts from generative error model, replaces with normal distribution,
+mechanistically silent
+
+* special cases of linear regression: ANOVA, ANCOVA, t-test, etc
+
+## Gaussian distributions
+
+* Ex: a lot of people line up and flip coins, if heads step left, if tails step right;
+take distances from line and represent as a distrbution, what distribution does this population
+attract to? inherently gaussian or bell shaped curve because process is adding together small
+fluctuations, there are many more ways of a series of coin tosses that attract you to the
+center line than there are for sequences that push you to the left/right
+
+* Why normal?
+
+1. Generative: summed fluctuations tend towards normal distribution
+
+2. Inferential: for estimationg mean and variance, normal distribution is least informative
+distribution (maxent); contains no additional info other than mean and variance
+
+* variable does not have to be normally distributed for normal model to be useful. it's a
+machine for estimating mean/variance, conservative/least informative
+
+## Making geocentric models
+
+Goals:
+
+1. language for representing models
+
+2. calculate posterior distributions with multiple unknowns
+
+3. constructing and understanding linear models
+
+## Workflow
+
+1. state a clear question: What is the association between adult weight and height?
+
+2. sketch your causal assumptions (scientific model): $W = f(H, U)$, U unobserved
+
+3. use the sketch to define a generative model (statistical model):
+
+* dynamic: incremental growth of organism, mass and height derive from growth pattern,
+Gaussian variation result of summed fluctuations
+
+* static: changes in height result in changes in weight, but no mechanism; Gaussian
+variation result of growth history
+
+* for adults, weight is a proportion of height plus the influence of unobserved causes:
+$W = \beta H + U$
+
+```{r}
+# generative model
+
+# function to simulate weights of individuals from height
+sim_weight <- function(H, b, sd) {
+  U <- rnorm(length(H), 0, sd) # unobserved "stuff", noise, error
+  W <- b*H + U
+  return(W)
+}
+```
+
+$$
+W_i = \beta H_i + U_i \\
+U_i \sim Normal(0, \sigma) \\
+H_i \sim Uniform(130, 170)
+$$
+
+where $i$ refers to an individual, $=$ refers to a deterministic relationship, $\sim$ refers
+to a distributional relationship (is distributed as)
+
+```{r}
+set.seed(12345)
+H <- runif(200, min = 130, max = 170)
+W <- sim_weight(H, b = 0.5, sd = 5)
+#plot(W ~ H, col = 2, lwd = 3)
+
+tibble(H, W) %>% ggplot(aes(x = H, y = W)) + geom_point(alpha = 0.5, color = "red")
+```
+
+4. use generative model to build estimator
+
+We want to estimate how the average weight changes with height (as in average weight
+conditional on height)
+
+$$
+E(W_i | H_i) = \alpha + \beta H_i
+$$
+
+Posterior distribution
+
+$$
+Pr(\alpha, \beta, \sigma | H_i, W_i) = \frac{Pr(W_i | H_i, \alpha, \beta, \sigma)Pr(\alpha, \beta, \sigma)}{Z}
+$$
+
+where $Pr(\alpha, \beta, \sigma | H_i, W_i)$ is the posterior probability of a specific
+regression line, $\alpha$ and $\beta$ define the line (expected weight for each height), and
+$\sigma$ defines error/variation around the expectation conditional on the data (observed variables)
+
+Likelihood function defined by $Pr(W_i | H_i, \alpha, \beta, \sigma)$ (the
+garden of forking data), the number of ways we can see the observations conditional on an exact
+regression line, here would be a gaussian distribution
+
+Prior (the previous posterior distribution) defined by $Pr(\alpha, \beta, \sigma)$, normalized number
+of ways data could have been produced given a set of unknowns
+
+Posterior usually written as
+
+$$
+W_i \sim Normal(\mu_i, \sigma) \\
+\mu_i = \alpha + \beta H_i
+$$
+
+Grid approximate posterior: can estimate posterior probability of regression lines given
+one set of model parameters
+
+Quadratic approximation: approx posterior as a multivariate gaussian
+
+```{r}
+m3.1 <- quap( # quadratic approximation
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a + b*H,
+    a ~ dnorm(0, 10),
+    b ~ dunif(0, 1),
+    sigma ~ dunif(0, 10)
+  ), data = list(W = W, H = H)
+)
+```
+
+$$
+W_i \sim Normal(\mu_i, \sigma) \\
+\mu_i = \alpha + \beta H_i \\
+\alpha \sim Normal(0, 10) \\
+\beta \sim Uniform(0, 1) \\
+\sigma \sim Uniform(0, 10)
+$$
+
+Prior predictive distribution
+
+Priors should express scientific knowledge, but softly
+
+When H = 0, W = 0,
+
+* weight increases (on average) with height
+
+* weight (kg) is less than height (cm)
+
+* sigma must be positive
+
+Understand the implications of priors through simulations, what do the observable
+variables look like with these priors?
+
+```{r}
+set.seed(12345)
+n <- 1e3
+a <- rnorm(n, 0, 10)
+b <- runif(n, 0, 1)
+
+# plot(NULL, xlim = c(130, 170), ylim = c(50, 90),
+#      xlab = "height (cm)", ylab = "weight (kg)")
+# for(j in 1:50) abline(a = a[j], b = b[j], lwd = 2, col = 2)
+
+df <- tibble(a[1:50], b[1:50])
+colnames(df) <- c("a", "b")
+ggplot() + geom_abline(data = df, aes(intercept = a, slope = b)) +
+  xlim(130, 170) + ylim(50, 90) + xlab("height (cm)") + ylab("weight (kg)")
+```
+
+More on priors:
+
+* there are no correct priors, only scientifically justifiable priors
+
+* justify with the info outside the data -- like the rest of the model
+
+* priors are not very important in simple models but are important in complex
+models
+
+5. model validation and analyze 
+
+Simulation-Based validation:
+
+* bare minimum: test statistical model with simulated observations from scientific
+model
+
+* strong test: simulation-based calibration
+
+```{r}
+# not a full simulation-based calibration; simple test
+
+# simulate a sample of 10 people
+set.seed(93)
+H <- runif(10, 130, 170) # can vary sample size to ensure convergence
+W <- sim_weight(H, b = 0.5, sd = 5) 
+# vary slope across runs to make sure posterior mean tracks it
+
+# run the model
+m3.1 <- quap( # quadratic approximation
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a + b*H,
+    a ~ dnorm(0, 10),
+    b ~ dunif(0, 1),
+    sigma ~ dunif(0, 10)
+  ), data = list(W = W, H = H)
+)
+
+# summary of marginal posterior distribution of each unknown
+precis(m3.1)
+```
+
+Data analysis
+
+```{r}
+data(Howell1)
+d <- Howell1[Howell1$age >= 18, ]
+```
+
+```{r}
+dat <- list(W = d$weight, H = d$height)
+m3.2 <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a + b*H,
+    a ~ dnorm(0, 10),
+    b ~ dunif(0, 1),
+    sigma ~ dunif(0, 10)
+  ), data = dat
+)
+precis(m3.2)
+# intercept < 0, definitely nonlinearity in the relationship btwn height and weight
+```
+
+First Law of Statistical Interpretation: The parameters are not independent of one
+another and cannot always be independently interpreted. Instead, extract posterior
+predictions and describe/interpret those.
+
+```{r}
+# extracts samples from posterior distribution
+post <- extract.samples(m3.2)
+head(post)
+```
+
+```{r}
+# generate posteriror predictive distribution with samples from posterior
+#post <- extract.samples(m3.2)
+
+# plot(d$height, d$weight, col = 2, lwd = 3,
+#      xlab = "height (cm)", ylab = "weight (kg)")
+# for (j in 1:20) abline(a = post$a[j], b = post$b[j], lwd = 1)
+
+# the posterior is full of lines
+p <- ggplot(data = d, aes(x = height, y = weight)) + geom_point(color = "red", alpha = 0.5) +
+  geom_abline(data = post[1:20, ], aes(intercept = a, slope = b)) +
+  xlab("height (cm)") + ylab("weight (kg)")
+p
+```
+
+```{r}
+# the posterior is full of people
+height_seq <- seq(130, 190, len = 20)
+W_postpred <- sim(m3.2, data = list(H = height_seq))
+W_PI <- apply(W_postpred, 2, PI)
+
+height_PI <- cbind(height_seq, W_PI[1, ], W_PI[2, ]) %>% data.frame
+colnames(height_PI) <- c("height", "pct_5", "pct_94")
+p + geom_line(data = height_PI, aes(x = height, y = pct_5), linetype = "dashed", size = 1) + 
+  geom_line(data = height_PI, aes(x = height, y = pct_94), linetype = "dashed", size = 1) +
+  xlim(130, 190) + ylim(30, 70)
+```
+
+
+## Describing models
+
+Conventional statistical model notation:
+
+1. list variables
+
+2. define each variable as deterministic or distributional function of the other
+variables
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
