@@ -1,0 +1,141 @@
+---
+title: "Week 2 Problem Set"
+author: "Paulo Magalang"
+date: "2023-10-11"
+output: html_document
+---
+
+```{r, eval = FALSE, warning= FALSE}
+library(rethinking)
+library(tidyverse)
+library(ggplot2)
+```
+
+4E1. In the model definition below, which line is the likelihood?
+
+$$
+y_i \sim Normal(\mu, \sigma) \\
+\mu \sim Normal(0, 10) \\
+\sigma \sim Exponential(1)
+$$
+
+The first line is the likelihood.
+
+4E2. In the model definition above, how many parameters are in the posterior distribtution?
+
+There are two paramters but $y_i$ can be observable or unobservable which can contribute
+to the number of parameters.
+
+4E3. Using the model definition above, write down the appropriate form of Bayes'
+theorem that includes the proper likelihood and priors.
+
+$$
+P(\mu, \sigma | y_i) = \frac{P(y_i | \mu, \sigma)P(\mu, \sigma)}{P(y_i)}
+$$
+
+4E4. In the model definition below, which line is the linear model?
+
+$$
+y_i \sim Normal(\mu, \sigma) \\
+\mu_i = \alpha + \beta x_i \\
+\alpha \sim Normal(0, 10) \\
+\beta \sim Normal(0, 1) \\
+\sigma \sim Exponential(2)
+$$
+
+$\mu_i = \alpha + \beta x_i$ is the linear model.
+
+4E5. In the model definition above, how many parameters are in the posterior distribution?
+
+The posterior can be written as $P(\alpha, \beta, \sigma | y_i, \mu_i)$
+
+
+4M1. For the model defintion below, simulate observed y values from the prior (not the
+posterior).
+
+$$
+y_i \sim N(\mu, \sigma) \\
+\mu \sim N(0, 10) \\
+\sigma \sim Exp(1)
+$$
+
+```{r}
+set.seed(12345)
+
+n <- 1e3
+mu <- rnorm(n, 0, 10)
+sigma <- rexp(n, 1)
+```
+
+```{r}
+y_sample <- rnorm(n, mu, sigma)
+data.frame(y_sample) %>% ggplot(aes(x = y_sample)) + geom_histogram(binwidth = 1) +
+  xlab("Simulated y values")
+```
+
+4M2. Translate the model just above into a quap formula.
+
+```{}
+q_4M2 <- quap(
+  alist(
+    y ~ dnorm(mu, sigma),
+    mu ~ dnorm(0, 10),
+    sigma ~ dexp(1),
+  ), data = df
+)
+```
+
+4M3. Translate the quap model formula below into a mathematical model definition.
+
+```{}
+y ~ dnorm(mu, sigma),
+mu <- a + b*x,
+a ~ dnorm(0, 10),
+b ~ dunif(0, 1),
+sigma ~ dexp(1)
+```
+
+$$
+y_i \sim N(\mu_i, \sigma) \\
+\mu_i = a + bx_i \\
+a \sim N(0, 10) \\
+b \sim Uniform(0, 1) \\
+\sigma \sim Exp(1)
+$$
+
+4M4. A sample of students is measured for height each year for 3 years. After the third year,
+you want to fit a linear regression predicting height using year as a predictor. Write
+down the mathematical model definition for this regression, using any variable names
+and priors you choose. Be prepared to defend your choice of priors.
+
+4M5. Now suppose I tell you that the variance among heights for the students of the same
+age is never more than 64cm. How does this lead you to revise your priors?
+
+4M7. Refit model `m4.3` from the chapter, but omit the mean weight `xbar` this time. 
+Compare the new model's posterior to that of the original model. In particular, look at
+the covariance among tha parameters. What is different? Then compare the posterior predictions
+of both models.
+
+4H1. The weights listed below were recorded in the !Kung census, but heights were not recorded
+for these individuals. Provide predicted heights and 89% intervals for each of these individuals.
+That is, fill in the table below, using model-based predictions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
