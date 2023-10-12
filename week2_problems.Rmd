@@ -108,6 +108,15 @@ you want to fit a linear regression predicting height using year as a predictor.
 down the mathematical model definition for this regression, using any variable names
 and priors you choose. Be prepared to defend your choice of priors.
 
+$$
+h_i \sim Norm(\mu_i, \sigma) \\
+\mu_i = \alpha + \beta (t_i - t_{birth}) \\
+\alpha \sim  Uni(0, 100)\\
+\beta \sim Uni(0, 10)\\
+\sigma \sim Exp(1)
+$$
+
+
 4M5. Now suppose I tell you that the variance among heights for the students of the same
 age is never more than 64cm. How does this lead you to revise your priors?
 
