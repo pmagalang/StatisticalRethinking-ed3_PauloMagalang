@@ -1,0 +1,384 @@
+---
+title: 'Chapter 4: Categories and Curves'
+author: "Paulo Magalang"
+date: "2023-10-17"
+output: html_document
+---
+
+Lecture: https://www.youtube.com/watch?v=F0N4b7K_iYQ&list=PLDcUM9US4XdPz-KxHM4XHt7uUVGWWVSus&index=5
+
+```{r, message = FALSE, warning = FALSE}
+library(rethinking)
+library(tidyverse)
+```
+
+
+Need to incorporate causal thinking into:
+
+1. How we draw statistical models
+
+* generative model + multiple estimands -> multiple estimators
+
+2. How we process the results
+
+* only very simple causal estimates show up in summary tables
+
+
+Categorical variables and Curves to build causal estimators
+
+* categories: indicator and index variables
+
+* splines and other structures 
+
+
+Categories
+
+* discrete, unordered types
+
+* stratify by category: fit a separate line for each
+
+
+* how are height (H), weight (W), and sex (S) causally related and statistically
+related?
+
+* consider the intervention to determine causal relationship in DAG
+
+S -> H, W
+
+H -> W
+
+* influence on weight by height is direct but influence on weight by sex is
+both direct and indirect
+
+$$
+H = f_H(S) \\
+W = f_W(H, S)
+$$
+
+```{r}
+set.seed(1)
+
+# S=1 female; S=2 male
+sim_HW <- function(S, b, a) {
+  N <- length(S)
+  H <- ifelse(S==1, 150, 160) + rnorm(N, 0, 5)
+  W <- a[S] + b[S]*H + rnorm(N, 0, 5) # for each S, different height-weight line
+  data.frame(S, H, W)
+}
+
+S <- rbern(100) + 1
+dat <- sim_HW(S, b = c(0.5, 0.6), a = c(0, 0))
+head(dat)
+```
+
+Different causal questions need different statistical models:
+
+1. Causal effect of H on W?
+
+2. Causal effect of S on W? (direct and indirect effects)
+
+3. Direct causal effect of S on W? (direct effect only)
+
+* stratify by S: different estimate for each value S can take
+
+Categorial OWLs
+
+Several ways to code categorical variables: indicator (0/1) var or index var (1, 2, 3, ...)
+
+Example:
+
+$$
+\alpha = [\alpha_1, \alpha_2, \alpha_3, \alpha_4] \\
+y_i \sim Norm(\mu_i, \sigma) \\
+\mu_i = \alpha_{COLOR}[i]
+$$
+
+Using Index Variables
+
+$$
+W_i \sim Norm(\mu_i, \sigma) \\
+\mu_i = \alpha_{S[i]} \\
+\alpha_j \sim Norm(60, 10) \\
+\alpha = [\alpha_1, \alpha_2] \\
+\sigma \sim Uni(0,10)
+$$
+
+where $S[i]$ is the sex of the i-th person in data frame
+
+
+Testing
+
+What is the total causal effect of sex? Causal effect of sex is differece made intervening:
+
+```{r}
+set.seed(1)
+
+# female sample
+S <- rep(1, 100)
+simF <- sim_HW(S, b = c(0.5, 0.6), a = c(0, 0))
+
+# male sample
+S <- rep(2, 100)
+simM <- sim_HW(S, b = c(0.5, 0.6), a = c(0, 0))
+
+# effect of sex (male - female)
+mean(simM$W - simF$W)
+```
+
+Now run the estimating model and synthetic sample
+
+```{r}
+set.seed(1)
+
+# observe sample
+S <- rbern(100) + 1
+dat <- sim_HW(S, b = c(0.5, 0.6), a = c(0, 0))
+
+# estimate prior
+m_SW <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S],
+    a[S] ~ dnorm(60, 10),
+    sigma ~ dunif(0, 10)
+  ), data = dat)
+precis(m_SW, depth = 2)
+```
+
+
+Analyze the real sample
+
+```{r}
+data(Howell1)
+d <- Howell1
+d <- d[d$age >= 18, ]
+dat <- list(
+  W = d$weight,
+  S = d$male + 1) # S=1 female, S=2 male
+
+m_SW <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S],
+    a[S] ~ dnorm(60, 10),
+    sigma ~ dunif(0, 10)
+  ), data = dat)
+```
+
+```{r}
+# posterior mean W
+post <- extract.samples(m_SW)
+
+df <- data.frame(c(post$a[, 1], post$a[, 2]),
+                 c(rep("W", length(post$a[, 1])), rep("M", length(post$a[, 2])))) 
+colnames(df) <- c("mean_W", "Sex")
+
+df %>% ggplot(aes(x = mean_W, fill = Sex)) + geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("blue", "red")) +
+  xlab("posterior mean weight (kg)")
+  
+
+#dens(post$a[, 1], xlim = c(39, 50), lwd = 3, col = 2,
+#     xlab = "posterior mean weight (kg)")
+#dens(post$a[, 2], lwd = 3, col = 4, add = TRUE)
+```
+
+```{r}
+# posterior W distributions
+W1 <- rnorm(1000, post$a[, 1], post$sigma)
+W2 <- rnorm(1000, post$a[, 2], post$sigma)
+
+df <- data.frame(c(W1, W2),
+                 c(rep("W", length(W1)), rep("M", length(W2)))) 
+colnames(df) <- c("Weight", "Sex")
+
+df %>% ggplot(aes(x = Weight, fill = Sex)) + geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("blue", "red")) +
+  xlab("posterior predicted weight (kg)")
+
+#dens(W1, xlim = c(20, 70), ylim = c(0, 0.085), lwd = 3, col = 2)
+#dens(W2, lwd = 3, col = 4, add = TRUE)
+```
+
+* need to compute contrast (difference between the categories), never legitimate
+to compare overlap in paramters or lines
+
+```{r}
+# causal contrast (in means)
+mu_contrast <- post$a[, 2]- post$a[, 1]
+
+dens(mu_contrast, xlim = c(3, 10), lwd = 3, col = 1,
+     xlab = "posterior mean weight contrast (kg)")
+```
+
+```{r}
+set.seed(1)
+
+# posterior @ distributions
+W1 <- rnorm(1000, post$a[, 1], post$sigma)
+W2 <- rnorm(1000, post$a[, 2], post$sigma)
+
+# contrast
+W_contrast <- W2 - W1
+dens(W_contrast, xlim = c(-25, 35), lwd = 3, col = 1,
+     xlab = "posterior weight contrast (kg)")
+
+# proportion above zero
+sum(W_contrast > 0) / 1000
+# proportion below zero
+sum(W_contrast < 0) / 1000
+```
+
+Direct causal effect of S on W? Need to "block" association through H. partial out
+
+```{r}
+set.seed(1)
+S <- rbern(100) + 1
+dat <- sim_HW(S, b = c(0.5, 0.5), a = c(0, 10))
+# indirect: H influences W differently (slopes)
+# direct: W differs net any slope differences
+```
+
+$$
+W_i \sim Norm(\mu_i, \sigma) \\
+\mu_i = \alpha_{S[i]} + \beta_{S[i]}(H_i - \bar{H}) \\
+\alpha = [\alpha_1, \alpha_2] \\
+\beta = [\beta_1, \beta_2]
+$$
+
+$H_i - \bar{H}$ is the centered height so that $\alpha$ is the average weight
+of a person with average height, makes it easier to define priors for $\alpha$ 
+
+```{r}
+# analyze the sample
+data("Howell1")
+d <- Howell1
+d <- d[d$age >= 18, ]
+dat <- list(
+  W = d$weight,
+  H = d$height,
+  Hbar = mean(d$height),
+  S = d$male + 1) # S=1 female, S=2 male
+
+m_SHW <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S] + b[S]*(H - Hbar),
+    a[S] ~ dnorm(60, 10),
+    b[S] ~ dunif(0, 1),
+    sigma ~ dunif(0, 10)
+  ), data = dat)
+```
+
+```{r}
+xseq <- seq(from = 130, to = 190, len = 50)
+
+muF <- link(m_SHW, data = list(S = rep(1, 50), H = xseq, Hbar = mean(d$height)))
+#lines(xseq, apply(muF, 2, mean), lwd = 3, col = 2)
+
+muM <- link(m_SHW, data = list(S = rep(2, 50), H = xseq, Hbar = mean(d$height)))
+#lines(xseq, apply(muM, 2, mean), lwd = 3, col = 4)
+
+mu_contrast <- muF - muM
+plot(NULL, xlim = range(xseq), ylim = c(-6, 8), xlab = "height (cm)",
+     ylab = "weight contrast (F-M)")
+for (p in c(0.5, 0.6, 0.7, 0.8, 0.9, 0.99))
+  shade(apply(mu_contrast, 2, PI, prob = p), xseq)
+abline(h = 0, lty = 2)
+```
+
+nearly all of the causal effect of S acts through H
+
+
+Most relationships are nonlinear, can easily fit linear models but not inherently
+mechanistic
+
+Two popular strategies
+
+1. polynomial linear models
+
+$\mu_i = \alpha + \beta_1 x_i + \beta_2 x_i^2$
+
+explosive uncertainty at edges, strange symmetry
+
+no local smoothing, only global, technically linear
+
+2. splines and generalized additive models -- less awful
+
+basis-splines: wiggly function built from many local functions
+
+$ \mu_i = \alpha + w_1 B_{i,1} + w_2 B_{i, 2} + ...$
+
+sum up basis functions to form spline, basis function governed by respective weight
+
+local functions make splines better than polynomials, but equally geocentric
+
+adding scientific data would help
+
+
+"Full Luxury Bayes"
+
+use one model of entire causal system instead of building two separate models
+
+use joint posterior to compute each estimand
+
+```{r}
+m_SHW_full <- quap(
+  alist(
+    # weight
+    W ~ dnorm(mu, sigma),
+    mu <- a[S] + b[S]*(H-Hbar),
+    a[S] ~ dnorm(60, 10),
+    b[S] ~ dunif(0, 1),
+    sigma ~ dunif(0, 10),
+    
+    # height
+    H ~ dnorm(nu, tau),
+    nu <- h[S],
+    h[S] ~ dnorm(160, 10),
+    tau ~ dunif(0, 10)
+  ), data = dat)
+```
+
+```{r}
+post <- extract.samples(m_SHW_full)
+Hbar <- dat$Hbar
+n <- 1e4
+
+with(post, {
+  # simulate W for S=1
+  H_S1 <- rnorm(n, h[, 1], tau)
+  W_S1 <- rnorm(n, a[, 1] + b[, 1]*(H_S1 - Hbar), sigma)
+  
+  # simulate W for S=2
+  H_S2 <- rnorm(n, h[, 2], tau)
+  W_S2 <- rnorm(n, a[, 2] + b[, 2]*(H_S2 - Hbar), sigma)
+  
+  # compute contrast
+  W_do_S <<- W_S2 - W_S1
+})
+```
+
+$p(W | do(S))$ where do() represents an intervention
+
+```{r}
+# automated way
+#HWsim <- sim(m_SHW_full,
+#             data = list(S = c(1, 2)),
+#             vars = c("H", "W"))
+#W_do_S_auto <- HWsim$W[, 2] - HWsim$W[, 1]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
